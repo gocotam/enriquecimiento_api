@@ -1,5 +1,10 @@
+"""
+@Autor Iván Martinez
+Contacto: imartinezt@liverpool.com.mx
+"""
 import base64
 from typing import Optional
+import requests
 import vertexai
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -27,9 +32,16 @@ class GenerateRequest(BaseModel):
 async def generate(request: GenerateRequest):
     try:
         if not request.images:
-            raise HTTPException(status_code=400, detail="No images provided")
 
-        decoded_images = [Part.from_data(data=base64.b64decode(img), mime_type="image/png") for img in request.images]
+            raise HTTPException(status_code=400, detail="No images provided")
+        decoded_images = []
+
+        for url in request.images:
+            response = requests.get(url)
+            response.raise_for_status()
+            image_data = base64.b64encode(response.content).decode("utf-8")
+            decoded_images.append(Part.from_data(data=base64.b64decode(image_data), mime_type="image/png"))
+
         model = GenerativeModel("gemini-pro-vision")
         response = model.generate_content(
             [request.prompt] + decoded_images,
