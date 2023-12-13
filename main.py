@@ -7,8 +7,13 @@ from typing import Optional
 import requests
 import vertexai
 from fastapi import FastAPI, HTTPException
+from langchain.chains import LLMChain, SequentialChain
+from langchain.llms import VertexAI
+from langchain.prompts import PromptTemplate
 from pydantic import BaseModel
-from vertexai.preview.generative_models import GenerativeModel, Part
+from vertexai.preview.generative_models import Part
+
+import PromptGallery
 
 app = FastAPI()
 
@@ -23,7 +28,7 @@ class GenerationConfig(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    prompt: str
+    attributes: str
     images: list[str]
     generation_config: GenerationConfig
 
@@ -32,7 +37,6 @@ class GenerateRequest(BaseModel):
 async def generate(request: GenerateRequest):
     try:
         if not request.images:
-
             raise HTTPException(status_code=400, detail="No images provided")
         decoded_images = []
 
@@ -42,18 +46,45 @@ async def generate(request: GenerateRequest):
             image_data = base64.b64encode(response.content).decode("utf-8")
             decoded_images.append(Part.from_data(data=base64.b64decode(image_data), mime_type="image/png"))
 
-        model = GenerativeModel("gemini-pro-vision")
-        response = model.generate_content(
-            [request.prompt] + decoded_images,
-            generation_config={
-                "max_output_tokens": request.generation_config.max_output_tokens,
-                "temperature": request.generation_config.temperature,
-                "top_p": request.generation_config.top_p,
-                "top_k": request.generation_config.top_k
-            },
+        llm = VertexAI(
+            model_name="gemini-pro-vision",
+            max_output_tokens=request.generation_config.max_output_tokens,
+            temperature=request.generation_config.temperature,
+            top_p=request.generation_config.top_p,
+            top_k=request.generation_config.top_k,
+            verbose=True,
         )
-        generated_content = str(response)
-        return {"respuesta": generated_content}
+
+        atributo_template = PromptGallery.Atributo_visible()
+        atributo_prompt = PromptTemplate(input_variables=["attributes"],
+                                         template=atributo_template)
+        atributo_chain = LLMChain(llm=llm, prompt=atributo_prompt, output_key="list_atributos", verbose=True)
+
+        images_template = PromptGallery.Enriquecimiento_imagenes()
+        images_prompt = PromptTemplate(
+            input_variables=["list_atributos"],
+            template=images_template)
+        images_chain = LLMChain(llm=llm, prompt=images_prompt, output_key="response", verbose=True)
+
+        overall_chain = SequentialChain(
+            chains=[atributo_chain, images_chain],
+            input_variables=["attributes", "images"],
+            output_variables=["response"],
+            verbose=True
+        )
+
+        model_response = overall_chain({
+            "attributes": request.attributes,
+            "images": decoded_images,
+        })
+
+        response = {
+            "output_text": model_response["response"].replace('\n', '').replace('```JSON', '').replace('```', '')
+        }
+
+        print(response['output_text'])
+
+        return response
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
