@@ -12,6 +12,7 @@ from langchain.llms import VertexAI
 from langchain.prompts import PromptTemplate
 from pydantic import BaseModel
 from vertexai.preview.generative_models import Part
+import uvicorn
 
 import PromptGallery
 
@@ -72,6 +73,8 @@ async def generate(request: GenerateRequest):
             output_variables=["response"],
             verbose=True
         )
+        
+        
 
         model_response = overall_chain({
             "attributes": request.attributes,
@@ -88,3 +91,10 @@ async def generate(request: GenerateRequest):
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    print("Using port:", port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))

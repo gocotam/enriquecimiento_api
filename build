@@ -1,0 +1,21 @@
+# bash build.sh
+#DOCKER_IMAGE="grupo_art"
+#BUCKET_NAME="docker_images_crp_dev_dig_ml_catalog"
+
+# Get the project and region from the gcloud configuration
+PROJECT_ID="crp-sdx-cx-ia"
+REPO_NAME="fast-api"
+IMAGE_NAME="enrichment_api"
+LOCAL_IMAGE_NAME="enrichment_api:latest"
+
+docker buildx build --platform linux/amd64 -t $LOCAL_IMAGE_NAME .
+
+IMAGE_URI="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}"
+
+# Etiqueta la imagen de Docker
+docker tag ${LOCAL_IMAGE_NAME} ${IMAGE_URI}
+
+echo "Subiendo imagen ${LOCAL_IMAGE_NAME} a ${IMAGE_URI}"
+
+# Sube la imagen al registro de contenedores
+docker push ${IMAGE_URI}

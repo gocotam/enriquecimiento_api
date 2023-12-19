@@ -42,22 +42,8 @@ def Enriquecimiento_imagenes():
                 para que sea actualizada en el sistema de administración de información de producto.
         
         [ESQUEMA PLANTILLA]
+        atributos: {attributes}
         
-        | Nombre del Atributo | Descripción | Origen | Visualizable | |---|---|---|---| | Tipo de Producto | 
-        Especifica si el producto es una cama, un sofá, una mesa, etc. | Atributo Extraído | Sí | | Material | 
-        Especifica el material principal del producto, como madera, metal, plástico, etc. | Atributo Extraído | Sí | 
-        | Color | Especifica el color principal del producto. | Atributo Extraído | Sí | | Estilo | Especifica el 
-        estilo del producto, como moderno, contemporáneo, tradicional, etc. | Atributo Extraído | Sí | | Tamaño | 
-        Especifica las dimensiones del producto, como largo, ancho y alto. | Atributo Extraído | Sí | | Peso | 
-        Especifica el peso del producto en kilogramos. | Atributo Extraído | No | | Capacidad de Peso | Especifica la 
-        cantidad máxima de peso que el producto puede soportar. | Atributo Recomendado | No | | Número de Cajones | 
-        Especifica el número de cajones que tiene el producto. | Atributo Recomendado | Sí | | Número de Puertas | 
-        Especifica el número de puertas que tiene el producto. | Atributo Recomendado | Sí | | Tipo de Colchón | 
-        Especifica el tipo de colchón que se recomienda para el producto. | Atributo Recomendado | No | | Garantía | 
-        Especifica la duración de la garantía del producto. | Atributo Recomendado | No | | Instrucciones de Cuidado 
-        | Especifica las instrucciones de cuidado del producto, como cómo limpiarlo y mantenerlo. | Atributo 
-        Recomendado | No | | Certificaciones | Especifica las certificaciones que tiene el producto, como ISO 9001 o 
-        CE. | Atributo Recomendado | No |
         
         [CONSIDERACIONES] 
         - Llevarás a cabo una evaluación minuciosa de la información del producto disponible en la 
@@ -82,5 +68,6 @@ def Enriquecimiento_imagenes():
         
         
         [IMÁGENES DEL PRODUCTO]
-        atributos: {attributes}
+        {images}
+        
     """
