@@ -11,7 +11,7 @@ from langchain.chains import LLMChain, SequentialChain
 from langchain.llms import VertexAI
 from langchain.prompts import PromptTemplate
 from pydantic import BaseModel
-from vertexai.preview.generative_models import Part
+from vertexai.preview.generative_models import Part, GenerativeModel
 import uvicorn
 
 import PromptGallery
@@ -42,52 +42,37 @@ async def generate(request: GenerateRequest):
         decoded_images = []
 
         for url in request.images:
-            response = requests.get(url)
-            response.raise_for_status()
-            image_data = base64.b64encode(response.content).decode("utf-8")
-            decoded_images.append(Part.from_data(data=base64.b64decode(image_data), mime_type="image/png"))
+            decoded_images.append(Part.from_uri(url, mime_type="image/jpeg"))
 
-        llm = VertexAI(
+        llm = GenerativeModel(
             model_name="gemini-pro-vision",
-            max_output_tokens=request.generation_config.max_output_tokens,
-            temperature=request.generation_config.temperature,
-            top_p=request.generation_config.top_p,
-            top_k=request.generation_config.top_k,
-            verbose=True,
         )
+        
+        generation_config = {"max_output_tokens":request.generation_config.max_output_tokens,
+            "temperature":request.generation_config.temperature,
+            "top_p":request.generation_config.top_p,
+            "top_k":request.generation_config.top_k,}
 
         atributo_template = PromptGallery.Atributo_visible()
-        atributo_prompt = PromptTemplate(input_variables=["attributes"],
-                                         template=atributo_template)
-        atributo_chain = LLMChain(llm=llm, prompt=atributo_prompt, output_key="list_atributos", verbose=True)
-
+        atributo = PromptTemplate.from_template(atributo_template)
+        atributo_prompt = atributo.format(attributes=request.attributes)
+        print(atributo_prompt)
+        atributo_response = llm.generate_content(atributo_prompt,
+                                         generation_config=generation_config)
+        
+        print(atributo_response.text)
         images_template = PromptGallery.Enriquecimiento_imagenes()
-        images_prompt = PromptTemplate(
-            input_variables=["list_atributos"],
-            template=images_template)
-        images_chain = LLMChain(llm=llm, prompt=images_prompt, output_key="response", verbose=True)
-
-        overall_chain = SequentialChain(
-            chains=[atributo_chain, images_chain],
-            input_variables=["attributes", "images"],
-            output_variables=["response"],
-            verbose=True
+        images = PromptTemplate.from_template(images_template)
+        images_prompt = images.format(attributes=atributo_response.text)
+        print(images_prompt)
+        
+        image_response = llm.generate_content(
+            [images_prompt, *decoded_images],
+            #generation_config=generation_config
         )
         
+        return image_response.text
         
-
-        model_response = overall_chain({
-            "attributes": request.attributes,
-            "images": decoded_images,
-        })
-
-        response = {
-            "output_text": model_response["response"].replace('\n', '').replace('```JSON', '').replace('```', '')
-        }
-
-        print(response['output_text'])
-
-        return response
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

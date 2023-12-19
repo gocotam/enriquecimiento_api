@@ -68,6 +68,5 @@ def Enriquecimiento_imagenes():
         
         
         [IMÁGENES DEL PRODUCTO]
-        {images}
         
     """
