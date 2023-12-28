@@ -2,16 +2,14 @@
 @Autor Iván Martinez
 Contacto: imartinezt@liverpool.com.mx
 """
-import base64
 from typing import Optional
-import requests
+import uvicorn
 import vertexai
 from fastapi import FastAPI, HTTPException
-from langchain.chains import LLMChain, SequentialChain
-from langchain.llms import VertexAI
 from langchain.prompts import PromptTemplate
 from pydantic import BaseModel
-from vertexai.preview.generative_models import Part
+from starlette.responses import JSONResponse
+from vertexai.preview.generative_models import Part, GenerativeModel
 
 import PromptGallery
 
@@ -36,55 +34,66 @@ class GenerateRequest(BaseModel):
 @app.post("/generate")
 async def generate(request: GenerateRequest):
     try:
-        if not request.images:
-            raise HTTPException(status_code=400, detail="No images provided")
-        decoded_images = []
+        multimodal_model = GenerativeModel("gemini-pro-vision")
+        if not request.images or not request.attributes:
+            raise HTTPException(status_code=400, detail="Invalid request data")
 
-        for url in request.images:
-            response = requests.get(url)
-            response.raise_for_status()
-            image_data = base64.b64encode(response.content).decode("utf-8")
-            decoded_images.append(Part.from_data(data=base64.b64decode(image_data), mime_type="image/png"))
+        # Convertir la lista de imágenes en partes decodificadas
+        decoded_images = [Part.from_uri(url, mime_type="image/jpeg") for url in request.images]
 
-        llm = VertexAI(
-            model_name="gemini-pro-vision",
-            max_output_tokens=request.generation_config.max_output_tokens,
-            temperature=request.generation_config.temperature,
-            top_p=request.generation_config.top_p,
-            top_k=request.generation_config.top_k,
-            verbose=True,
-        )
-
+        # Generación de contenido basado en la plantilla de atributos
         atributo_template = PromptGallery.Atributo_visible()
-        atributo_prompt = PromptTemplate(input_variables=["attributes"],
-                                         template=atributo_template)
-        atributo_chain = LLMChain(llm=llm, prompt=atributo_prompt, output_key="list_atributos", verbose=True)
+        atributo = PromptTemplate.from_template(atributo_template)
+        atributo_prompt = atributo.format(attributes=request.attributes)
+        atributo_response = multimodal_model.generate_content([atributo_prompt, *decoded_images])
 
+        # Emparejamiento de la respuesta de atributos con la plantilla de imágenes
         images_template = PromptGallery.Enriquecimiento_imagenes()
-        images_prompt = PromptTemplate(
-            input_variables=["list_atributos"],
-            template=images_template)
-        images_chain = LLMChain(llm=llm, prompt=images_prompt, output_key="response", verbose=True)
+        images = PromptTemplate.from_template(images_template)
+        images_prompt = images.format(attributes=atributo_response.text)
+        image_response = multimodal_model.generate_content([images_prompt, *decoded_images])
 
-        overall_chain = SequentialChain(
-            chains=[atributo_chain, images_chain],
-            input_variables=["attributes", "images"],
-            output_variables=["response"],
-            verbose=True
-        )
-
-        model_response = overall_chain({
-            "attributes": request.attributes,
-            "images": decoded_images,
-        })
-
-        response = {
-            "output_text": model_response["response"].replace('\n', '').replace('```JSON', '').replace('```', '')
+        # Devolver respuesta procesada
+        return {
+            "Status": {
+                "General": "Success",
+                "Details": {
+                    "Images": {
+                        "Code": "00",
+                        "Message": "Generado exitosamente."
+                    }
+                }
+            },
+            "output_text": image_response.text
         }
 
-        print(response['output_text'])
+    except HTTPException as he:
+        return JSONResponse(content={
+            "Status": {
+                "General": "Error",
+                "Details": {
+                    "Images": {
+                        "Code": "01",
+                        "Message": str(he.detail)
+                    }
+                }
+            }
+        }, status_code=he.status_code)
 
-        return response
     except Exception as e:
         print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return JSONResponse(content={
+            "Status": {
+                "General": "Error",
+                "Details": {
+                    "Images": {
+                        "Code": "01",
+                        "Message": "Servicio no disponible."
+                    }
+                }
+            }
+        }, status_code=500)
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
